@@ -158,13 +158,28 @@ defmodule Oban.Engines.Basic do
     limit = Keyword.fetch!(opts, :limit)
     time = DateTime.add(DateTime.utc_now(), -max_age)
 
-    subquery =
+    completed_query =
       queryable
       |> select([:id, :queue, :state])
       |> where([j], j.state == "completed" and j.scheduled_at < ^time)
-      |> or_where([j], j.state == "cancelled" and j.cancelled_at < ^time)
-      |> or_where([j], j.state == "discarded" and j.discarded_at < ^time)
       |> where([j], not is_nil(j.queue))
+
+    cancelled_query =
+      queryable
+      |> select([:id, :queue, :state])
+      |> where([j], j.state == "cancelled" and j.cancelled_at < ^time)
+      |> where([j], not is_nil(j.queue))
+
+    discarded_query =
+      queryable
+      |> select([:id, :queue, :state])
+      |> where([j], j.state == "discarded" and j.discarded_at < ^time)
+      |> where([j], not is_nil(j.queue))
+
+    subquery =
+      completed_query
+      |> union_all(^cancelled_query)
+      |> union_all(^discarded_query)
       |> limit(^limit)
 
     query =
